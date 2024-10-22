@@ -1,44 +1,51 @@
+// https://atcoder.jp/contests/dp/submissions/59070069
+// 求 [1, k] 中数位之和是 d 的倍数的数字总数
 #include <bits/stdc++.h>
 using namespace std;
-using ll = long long;
-ll a[20], dp[20][20];
-ll dfs(int len, int las, int maxi, int lead) {
-    if (len == 0) return 1;
-    if (!maxi && !lead && dp[len][las] != -1) return dp[len][las];
-    ll sum = 0;
-    int ma = 9;
-    if (maxi) ma = a[len];
-    if (lead) {
-        for (int i = 0; i <= ma; i++) {
-            if (i == 0) sum += dfs(len - 1, i, 0, lead);
-            else if (i == ma && maxi) sum += dfs(len - 1, i, maxi, 0);
-            else sum += dfs(len - 1, i, 0, 0);
-        }
-    } else {
-        for (int i = 0; i <= ma; i++) {
-            if (abs(i - las) < 2) continue;
-            if (i == ma && maxi) sum += dfs(len - 1, i, maxi, 0);
-            else sum += dfs(len - 1, i, 0, 0);
-        }
+constexpr int MOD = (int)1e9 + 7;
+inline int add(int a, int b) { return a + b >= MOD ? a + b - MOD : a + b; }
+const int N = 10010;
+const int M = 105;
+int digits, a[N], d;
+int dp[N][M];  // dp[i][j]表示 枚举到第i位,之前的状态为j
+
+// pos: 枚举到第i位, last: 前驱状态, limit: 之前是否是边界数位, lz(leading zero): 之前是否是前导零
+int dfs(int pos, int last, int limit, int lz) {
+    if (pos == digits) {  // 达到搜索边界
+        return (!lz) && (last == 0);
     }
-    if (maxi == 0 && lead == 0) dp[len][las] = sum;
-    return sum;
+    if (!limit && !lz && dp[pos][last] != -1) {  // 之前搜索过的状态
+        return dp[pos][last];
+    }
+    int res = 0;
+    if (lz) {  // 之前的数位都是前导零
+        res = dfs(pos + 1, 0, 0, 1);
+    }
+    for (int i = 1 - (lz == 0); i <= (limit ? a[pos] : 9); i++) {  // 这里搜索所有非前导零的后继状态
+        int nxt_limit = (limit ? a[pos] == i : 0);  // 下一个limit状态
+        res = add(res, dfs(pos + 1, (last + i) % d, nxt_limit, 0));
+    }
+    if (!limit && !lz) {  // 只要不是边界状态就记忆化
+        dp[pos][last] = res;
+    }
+    return res;
 }
-ll sol(ll x) {
-    int cnt = 0;
-    a[++cnt] = x % 10;
-    x /= 10;
-    while (x) {
-        a[++cnt] = x % 10;
-        x /= 10;
+
+int solve(const string& s) {
+    memset(dp, -1, sizeof dp);
+    digits = s.length();
+    for (int i = 0; i < s.length(); i++) {
+        a[i] = s[i] - '0';
     }
-    return dfs(cnt, 0, 1, 1);
+    return dfs(0, 0, 1, 1);
 }
 
 int main() {
-    ll l, r;
-    cin >> l >> r;
-    memset(dp, -1, sizeof(dp));
-    cout << sol(r) - sol(l - 1) << "\n";
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    cout.tie(nullptr);
+    string k;
+    cin >> k >> d;
+    cout << solve(k);
     return 0;
 }
