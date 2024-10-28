@@ -2,9 +2,11 @@
 
 ## 0-1背包
 
-> [[USACO07DEC] Charm Bracelet S](https://www.luogu.com.cn/problem/P2871)
+> [**EDPC D - Knapsack 1**](https://atcoder.jp/contests/dp/tasks/dp_d)
 >
-> 有 $n$ 个物品和一个容量为 $W$ 的背包，每个物品有重量 $w_{i}$ 和价值 $v_{i}$ 两种属性，要求选若干物品放入背包使背包中物品的总价值最大且背包中物品的总重量不超过背包的容量。
+> 有 $N$ 个物品和一个容量为 $W$ 的背包，每个物品有重量 $w_{i}$ 和价值 $v_{i}$ 两种属性，要求选若干物品放入背包使背包中物品的总价值最大且背包中物品的总重量不超过背包的容量。
+>
+> $N\le 1e2; W,w_i\le 1e5; v_i\le 1e9$。
 
 设 DP 状态 $f_{i,j}$ 为在只能放前 $i$ 个物品的情况下，容量为 $j$ 的背包所能达到的最大总价值。
 
@@ -22,12 +24,86 @@ $$
 注意到 $f[j]$ 只能由 $f[j]$ 或者 $f[j-w_i]$ 推得，而 $j,j-w_i\le j$，也就是说如果我们从大到小遍历背包的值域，那么 $f_j$ 就不会受到前一轮dp的影响
 
 ```cpp
-for (int i = 1; i <= n; i++) {
+int N, W;
+// input
+vector<long long> f(W + 1);
+for (int i = 1; i <= N; i++) {
     for (int j = W; j >= w[i]; j--) {
-        dp[j] = max(dp[j], dp[j - w[i]] + v[i]);
+        f[j] = max(f[j], f[j - w[i]] + v[i]);
     }
 }
+cout << f[W];
 ```
+
+### 0-1背包变形
+
+如果0-1背包问题变形为：要求选若干物品放入背包使背包中物品的总价值最大且背包中物品的总重量**恰好等于**背包的容量时怎么办？
+
+注意到0-1背包问题本质上是在问：背包中**至多**装 $W$ 重量时的最大价值，也就是 $f[i][j]$ 表示枚举到 $i$，容量为 $j$ 的背包能装下的最大价值，这里的 $j$ 是不一定能装满的，因此我们可以直接给dp数组全部赋值为0没有问题。但是现在我们要求 $f[i][j]$ 应该表示枚举到 $i$，容量为 $j$ 的背包**恰好装满**时的最大价值，因此就不能直接给dp数组全部赋值为0。
+
+实际上我们只需要给dp数组全部赋值为 $-\infty$，然后令 `f[0] = 0` 即可，这样就表示初始状态下，只有 $f[0]$ 这个状态是可达的（背包为空时价值为0），这样 $f[W]$ 就能表示背包中**恰好**装 $W$ 重量时的最大价值。
+
+> 这个技巧也可以推广到“背包中**至少**装 $W$ 重量时的最大价值”这一问题。
+
+### Bitset优化
+
+考虑这么一个0-1背包变形：
+
+> 有 $N$ 个物品和一个容量为 $W$ 的背包，每个物品只有重量 $w_{i}$ 这一属性，询问能否恰好装满背包？
+>
+> $N\le 100,W\le 1e8$。
+
+这种问题也可以称为是可行性dp，要求判断某一状态是否可达。这种问题大都可以通过bitset优化，令 $f_i=0/1$ 表示背包恰好装重量之和为 $i$ 的状态是否可达，然后就有
+
+```cpp
+int N, W;
+// input
+bitset<N> f;
+f.set(0);
+for (int i = 1; i <= N; i++) {
+    f |= (f << w[i]);
+}
+cout << f[W];
+```
+
+### 例题
+
+#### [P1489 猫狗大战](https://www.luogu.com.cn/problem/P1489)
+
+> 给定长度为 $N$ 的数组 $A$，将 $A$ 划分为两个子集 $S,T$，要求：
+>
+> 1. 两个子集中的元素个数之差不超过1，即 $abs(|S|-|T|)\le 1$.
+> 2. 两个子集的元素和之差最小，即 $\text{minimize}\ abs(\sum_{i\in S}i-\sum_{j\in T}j).$
+>
+> 求这 $S,T$ 各自的元素和。
+>
+> $N\le 200, A_i\le 40$.
+
+令 $dp[i][j]$ 表示一共装了 $i$ 个元素，元素之和为 $j$ 的状态是否可达，然后就能解决了。这题的数据范围甚至不需要bitset优化。
+
+#### [1049. 最后一块石头的重量 II](https://leetcode.cn/problems/last-stone-weight-ii/)
+
+看起来不像背包问题，但是实际上只需要一个简单的转化：假设有3块石头 $x,y,z$，假设我们先合并 $x,y$，那么就只剩下了石头 $(+x-y),z$ 或者 $(-x+y),z$；此时我们再合并这两块石头，就会得到 $+z-(+x-y)$ 或 $-z+(+x-y)$，显然这个问题等价于：将石子划分为两个集合 $S,T$，最小化这两个集合中元素和之差。
+
+[3181. 执行操作可获得的最大总奖励 II](https://leetcode.cn/problems/maximum-total-reward-using-operations-ii/)
+
+非常裸的bitset优化，需要注意的就是用bitset的溢出来移除我们不需要的位。
+
+[2742. 给墙壁刷油漆](https://leetcode.cn/problems/painting-the-walls/)
+
+题目显然是在问：付费油漆匠至少花费 $\lceil\frac{N}{2}\rceil$ 时间刷墙时，开销最少为多少？这就是一个典型的0-1背包变形问题。
+
+[EDPC E - Knapsack 2](https://atcoder.jp/contests/dp/tasks/dp_e)
+
+> 0-1背包，但是数据范围变成了
+>
+> $N\le 100;W,w_i\le 1e9; v_i\le 1e3$.
+
+注意到这个问题和传统0-1背包问题的数据范围相反（$W$ 很大，$v_i$ 很小），因此我们只需要转换思路令 $f[i][j]$ 表示枚举到第 $i$ 个物体，当前恰好花了 $j$ 元时最少需要多少质量的物体。
+
+> 如果 $N=40;W,w_i,v_i\le 1e9$，那么可以用meet in the middle（折半搜索）解决。
+
+
 
 ## 完全背包
 
@@ -93,25 +169,20 @@ for (int i = 1; i <= n; i++) {
 
 ```cpp
 vector<int> dp(W + 1), w, v;
-for (int i = 1; i <= n; i++) {
-    int value, weight, m;
-    cin >> value >> weight >> m;
-    for (int j = 1;; j *= 2) {
-        if (m <= j) {
-            w.push_back(m * weight);
-            v.push_back(m * value);
-            break;
-        }
-        w.push_back(j * weight);
-        v.push_back(j * value);
-        m -= j;
-        if (m <= j) {
-            w.push_back(m * weight);
-            v.push_back(m * value);
-            break;
+    for (int i = 1; i <= n; i++) {
+        int value, weight, m;
+        cin >> value >> weight >> m;
+        for (int j = 1, k = 2;; j *= 2, k *= 2) {
+            w.push_back(j * weight);
+            v.push_back(j * value);
+            m -= j;
+            if (m <= k) {
+                w.push_back(m * weight);
+                v.push_back(m * value);
+                break;
+            }
         }
     }
-}
 for (int i = 0; i < w.size(); i++) {
     for (int j = W; j >= w[i]; j--) {
         dp[j] = max(dp[j], dp[j - w[i]] + v[i]);
@@ -174,3 +245,11 @@ cout << *max_element(dp1.begin(), dp1.end());
 ```
 
 时间复杂度 $O(nW)$。
+
+## 经典问题变形
+
+### 0-1背包变形
+
+
+
+### Bitset优化
