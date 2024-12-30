@@ -529,7 +529,7 @@ private:
 
 总结就是：对于一棵常规的带有懒惰标记的线段树，我们将所有需要实现的部分抽象到了7个部分。
 
-此外，我们还能把线段树上二分也集成进去，可以参考ac-library的定义。
+此外，我们还能把线段树上二分也集成进去，这也可以参考ac-library的定义。但我感觉这个模板化并不好用，大部分情况都要改模板内的代码，代码实现请参考下一节中的线段树上二分。
 
 
 
@@ -585,9 +585,27 @@ t[rt].seg = max({ t[lc].seg,t[rc].seg,t[lc].suf + t[rc].pre });
 > 1. `add(l, r, v)`：对于 $a_i(l\le i\lt r)$ 加上 $x$。
 > 2. `lower_bound(l, x)`：查询第一个满足 $j\ge l,a[j]\ge x$ 的元素的下标。
 
-实际上很简单，我们维护一下线段的区间最大值即可，如果左儿子的区间最大值超过 $x$ 并且左儿子的区间和 $[l,+\infty)$ 有交集就向左儿子递归，否则向右儿子递归。复杂度分析很简单：和区间加的复杂度分析类似，线段树上每一层最多两次失败查询+两次成功查询，因此复杂度是 $O(\log n)$。
+实际上很简单，我们维护一下线段的区间最大值即可，如果左儿子的区间最大值超过 $x$ 并且左儿子的区间和 $[l,+\infty)$ 有交集就向左儿子递归，如果左儿子没找到或者符合条件的元素就向右儿子递归。复杂度分析很简单：和区间加的复杂度分析类似，线段树上每一层最多两次失败查询+两次成功查询，因此复杂度是 $O(\log n)$。
 
-> 线段树上的lower_bound操作甚至不需要序列单调。
+> 线段树上的lower_bound操作甚至不需要序列单调。这是因为我们本质上是在线段树维护的前缀最值数组中进行二分，而这个数组是单调的。
+
+```cpp
+// 找第一个满足 a[j] >= x and j >= lo 的下标j
+// 如果不存在就返回 n + 1
+int min_left(int rt, int l, int r, int lo, ll x) {
+    if (l == r) {
+        return l;
+    }
+    push_down(rt);
+    int mid = (l + r) / 2, res = _n + 1;
+    if (mid >= lo and data[rt * 2].max_elem >= x) res = min_left(rt * 2, l, mid, lo, x);
+    if (res > _n and data[rt * 2 + 1].max_elem >= x) res = min_left(rt * 2 + 1, mid + 1, r, lo, x);
+    push_up(rt);
+    return res;
+}
+```
+
+
 
 ### 动态开点
 
@@ -606,11 +624,93 @@ t[rt].seg = max({ t[lc].seg,t[rc].seg,t[lc].suf + t[rc].pre });
 
 在代码实现中，我们可以在 `push_down` 时进行子结点的创建（这样就能保证我们一定创建了所有可能走到的结点）。动态开点所需内存更大，注意多开空间。
 
+```cpp
+template<class S, auto op, auto e, class F, auto mapping, auto composition, auto id>
+class dynamicSegTree {
+public:
+    dynamicSegTree() : dynamicSegTree(0) {}
+    // 注意这里尽量多开空间 不知道会申请多少结点
+    explicit dynamicSegTree(int n, int m = (int)2e6 * 4 + 10) : _n(n) {
+        data.reserve(m);
+        lazy.reserve(m);
+        t.reserve(m);
+        t.push_back({ -1,-1,-1,-1 });
+        lazy.push_back(id());
+        data.push_back(e());
+        nodes = 0;
+        make_node(1, n);  // root
+    }
+    int make_node(int l, int r) {
+        t.push_back({ l,r,-1,-1 });
+        lazy.push_back(id());
+        data.push_back(e());
+        return ++nodes;
+    }
+    void push_up(int rt) {
+        auto&& [l, r, lc, rc] = t[rt];
+        data[rt] = op(data[lc], data[rc]);
+    }
+    void apply(int rt, F f) {
+        data[rt] = mapping(f, data[rt]);
+        lazy[rt] = composition(f, lazy[rt]);
+    }
+    void push_down(int rt) {
+        auto&& [l, r, lc, rc] = t[rt];
+        int mid = (l + r) / 2;
+        if (lc == -1) {
+            lc = make_node(l, mid);
+        }
+        if (rc == -1) {
+            rc = make_node(mid + 1, r);
+        }
+        if (not (lazy[rt] == id())) {
+            apply(lc, lazy[rt]);
+            apply(rc, lazy[rt]);
+        }
+        lazy[rt] = id();
+    }
+    void range_modify(int rt, int ql, int qr, F f) {
+        auto&& [l, r, lc, rc] = t[rt];
+        if (r < ql or l > qr) {
+            return;
+        }
+        if (ql <= l and r <= qr) {
+            apply(rt, f);
+            return;
+        }
+        push_down(rt);
+        int mid = (l + r) / 2;
+        range_modify(lc, ql, qr, f);
+        range_modify(rc, ql, qr, f);
+        push_up(rt);
+    }
+    S range_query(int rt, int ql, int qr) {
+        auto&& [l, r, lc, rc] = t[rt];
+        if (r < ql or l > qr) {
+            return e();
+        }
+        if (ql <= l and r <= qr) {
+            return data[rt];
+        }
+        push_down(rt);
+        int mid = (l + r) / 2;
+        auto&& res = op(range_query(lc, ql, qr), range_query(rc, ql, qr));
+        push_up(rt);
+        return res;
+    }
+private:
+    int _n, nodes;
+    vector<tuple<int, int, int, int>> t;  // (l, r, lc, rc)
+    vector<S> data;
+    vector<F> lazy;
+};
+```
 
 
-## 练习题（TODO）
 
-[Assignment, Addition, and Sum](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/A)
+## 练习题
+
+### [Assignment, Addition, and Sum](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/A)
 
 > 维护三种操作：
 >
@@ -655,7 +755,7 @@ F id() {
 }
 ```
 
-[Add Arithmetic Progression On Segment](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/B)
+### [Add Arithmetic Progression On Segment](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/B)
 
 > 维护两种操作：
 >
@@ -664,7 +764,7 @@ F id() {
 
 因为只要求单点求值，所以我们维护差分数组 $d_i=a_i-a_{i-1}$ 就行了，在差分数组上区间加等差数列就是普通的区间加公差+末尾单点修改。单点求值就是差分数组前缀和。
 
-[Painter](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/C)
+### [Painter](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/C)
 
 > 对于一个0-1数组维护以下两种操作：
 >
@@ -680,7 +780,7 @@ F id() {
 
 pushup时 `t[rt].cnt = t[lc].cnt + t[rc].cnt - (t[lc].rb == 1 && t[rc].lb == 1)`（当两端区间的交界处都为1时去重）。
 
-[Problem About Weighted Sum](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/D)
+### [Problem About Weighted Sum](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/D)
 
 > 维护两种操作：
 >
@@ -689,7 +789,7 @@ pushup时 `t[rt].cnt = t[lc].cnt + t[rc].cnt - (t[lc].rb == 1 && t[rc].lb == 1)`
 
 维护两个数组：`a[1], a[2], a[3], ..., a[n]` 和 `a[1], 2*a[2], 3*a[3], ..., n*a[n]`。
 
-[IOI2014 - Wall](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/E)
+### [IOI2014 - Wall](https://codeforces.com/edu/course/2/lesson/5/4/practice/contest/280801/problem/E)
 
 > 维护两种操作：
 >
@@ -739,3 +839,13 @@ F id() {
 }
 ```
 
+### [IOI2005 - Mountain](https://vjudge.net/problem/DMOJ-ioi05p2)
+
+> 对于一个差分数组 $d_i=a_i-a_{i-1}$ ，维护：
+>
+> 1. `I a b D`：将区间 $[l,r]$ 中的 $d_i$ 修改为 $D$。
+> 2. `Q h`：询问第一个大于 $h$ 的 $a_i$。
+
+实际上就是需要维护前缀和最值，令前缀和最值为 `max_pre`，则 `rt.max_pre = max(lc.max_pre, lc.sum + rc.max_pre)`，在 `push_up` 时更新即可。
+
+此外本题需要动态开点。
